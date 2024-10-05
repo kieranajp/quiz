@@ -1,0 +1,13 @@
+### Welcome
+
+GET http://localhost:8080/
+
+### Create game
+
+POST http://localhost:8080/game
+
+> {%client.global.set("gameId", response.body.game_id)%}
+
+### Start game
+
+POST http://localhost:8080/game/{{gameId}}/start

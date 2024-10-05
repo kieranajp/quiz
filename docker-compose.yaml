@@ -1,0 +1,14 @@
+services:
+
+  # A postgres database
+    quiz_db:
+        image: postgres
+        environment:
+          POSTGRES_DB: quiz
+          POSTGRES_USER: quiz
+          POSTGRES_PASSWORD: ziuq
+        ports:
+          - "5432:5432"
+        volumes:
+          # This volume contains init sql files
+          - ./docker/psql/volume:/docker-entrypoint-initdb.d
