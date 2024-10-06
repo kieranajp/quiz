@@ -20,19 +20,35 @@ type Aggregate interface {
 
 type BaseAggregate struct{}
 
-// ApplyEvent dynamically calls an event handler method based on the event type.
-func (b *BaseAggregate) ApplyEvent(target interface{}, e event.Event) error {
+// Apply dynamically calls an event handler method based on the event type.
+func (b *BaseAggregate) Apply(target interface{}, e event.Event) error {
 	// Create the method name by converting event type to a method name, e.g. "game_created" -> "ApplyGameCreated"
 	c := cases.Title(language.English)
-	methodName := "Apply" + strings.ReplaceAll(c.String(e.EventType()), "_", "")
+	snakeToCamel := func(input string) string {
+		words := strings.Split(input, "_")
+		for i := range words {
+			words[i] = c.String(words[i])
+		}
+		return strings.Join(words, "")
+	}
 
-	method := reflect.ValueOf(target).MethodByName(methodName)
+	methodName := "Apply" + snakeToCamel(e.EventType())
+
+	// Use reflection to find the method on the target
+	targetValue := reflect.ValueOf(target)
+	method := targetValue.MethodByName(methodName)
 	if !method.IsValid() {
 		return fmt.Errorf("unknown event type: %s", e.EventType())
 	}
 
+	// Prepare the argument value
+	eventValue := reflect.ValueOf(e)
+	if eventValue.Kind() == reflect.Ptr {
+		eventValue = reflect.Indirect(eventValue)
+	}
+
 	// Invoke the method
-	result := method.Call([]reflect.Value{reflect.ValueOf(e)})
+	result := method.Call([]reflect.Value{eventValue})
 	if len(result) == 1 && !result[0].IsNil() {
 		return result[0].Interface().(error)
 	}

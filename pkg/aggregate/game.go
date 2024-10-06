@@ -25,7 +25,8 @@ type GameSettings struct {
 	QuestionsPerRound int
 }
 
-func NewGameAggregate(gameID uuid.UUID) GameAggregate {
+func NewGame() GameAggregate {
+	gameID := uuid.New()
 	return GameAggregate{
 		ID:         gameID,
 		HasStarted: false,
@@ -43,7 +44,7 @@ func (g *GameAggregate) AggregateID() uuid.UUID {
 }
 
 func (g *GameAggregate) ApplyEvent(e event.Event) error {
-	return g.BaseAggregate.ApplyEvent(g, e)
+	return g.BaseAggregate.Apply(g, e)
 }
 
 func (g *GameAggregate) ApplyGameCreated(e event.GameCreated) {

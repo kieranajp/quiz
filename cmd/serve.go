@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"github.com/google/uuid"
 	"github.com/kieranajp/quiz/pkg/database/eventstore"
+	"github.com/kieranajp/quiz/pkg/event"
 	"github.com/kieranajp/quiz/pkg/service"
 	"net/http"
+	"strings"
 
 	"github.com/kieranajp/quiz/pkg/database"
 	"github.com/kieranajp/quiz/pkg/handler"
@@ -25,7 +28,16 @@ func Serve(c *cli.Context) error {
 	}
 	defer db.Close()
 
-	es := eventstore.NewEventStore(db)
+	// Create an event registry and register events
+	eventRegistry := eventstore.NewEventRegistry()
+	eventRegistry.RegisterEvent("game_created", &event.GameCreated{})
+	eventRegistry.RegisterEvent("player_joined", &event.PlayerJoined{})
+	// Register other events as needed
+
+	es := eventstore.NewEventStore(db, eventRegistry)
+	es.SetEventStreamNamingStrategy(func(aggregateID uuid.UUID) string {
+		return "game_" + strings.ReplaceAll(aggregateID.String(), "-", "_")
+	})
 
 	gs := service.NewGameService(es)
 	gh := handler.NewGameHandler(gs)
@@ -33,7 +45,7 @@ func Serve(c *cli.Context) error {
 	r.Get("/", handler.WelcomeHandler)
 	r.Post("/game", gh.CreateGame)
 	r.Post("/game/{gameID}/start", gh.StartGame)
-	r.Get("/game/{gameID}/question", gh.NextQuestion)
+	// r.Get("/game/{gameID}/question", gh.NextQuestion)
 
 	log.Info().Str("listen-addr", c.String("listen-addr")).Msg("Starting server")
 	return http.ListenAndServe(c.String("listen-addr"), r)

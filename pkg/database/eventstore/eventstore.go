@@ -20,6 +20,7 @@ type EventStore struct {
 	mux               sync.Mutex
 	db                *sqlx.DB
 	eventStreamNaming EventStreamNamingStrategy
+	eventRegistry     *EventRegistry
 }
 
 // defaultEventStreamName is the default naming strategy, using a single table.
@@ -28,11 +29,12 @@ func defaultEventStreamName(_ uuid.UUID) string {
 }
 
 // NewEventStore creates a new EventStore instance.
-func NewEventStore(db *sqlx.DB) *EventStore {
+func NewEventStore(db *sqlx.DB, registry *EventRegistry) *EventStore {
 	return &EventStore{
 		subscribers:       make(map[string][]func(event interface{})),
 		db:                db,
 		eventStreamNaming: defaultEventStreamName,
+		eventRegistry:     registry,
 	}
 }
 
@@ -117,25 +119,37 @@ func (es *EventStore) Subscribe(eventType string, handler func(event interface{}
 }
 
 // LoadAggregate loads the aggregate state from the stored events.
-func (es *EventStore) LoadAggregate(aggregateID uuid.UUID, agg Aggregate) (Aggregate, error) {
+func (es *EventStore) LoadAggregate(aggregateID uuid.UUID, agg Aggregate) error {
 	tableName := es.eventStreamNaming(aggregateID)
 
 	query := fmt.Sprintf(
 		"SELECT event_type, event_data FROM %s WHERE aggregate_id = $1 ORDER BY created_at ASC",
 		tableName)
 
-	var events []event.Event
-
-	err := es.db.Select(&events, query, aggregateID)
-	if err != nil {
-		return nil, err
+	// Define a slice of structs to hold the raw event data
+	var rawEvents []struct {
+		EventType string `db:"event_type"`
+		EventData []byte `db:"event_data"`
 	}
 
-	for _, e := range events {
+	// Query the database to load the raw event data
+	err := es.db.Select(&rawEvents, query, aggregateID)
+	if err != nil {
+		return err
+	}
+
+	// Iterate through the raw events and use the EventRegistry to create event instances
+	for _, rawEvent := range rawEvents {
+		e, err := es.eventRegistry.CreateEventInstance(rawEvent.EventType, rawEvent.EventData)
+		if err != nil {
+			return err
+		}
+
+		// Apply the event to the aggregate
 		if err := agg.ApplyEvent(e); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	return agg, nil
+	return nil
 }
