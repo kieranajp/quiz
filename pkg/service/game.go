@@ -2,14 +2,10 @@ package service
 
 import (
 	"fmt"
-	"github.com/kieranajp/quiz/pkg/database/entity"
-	"github.com/kieranajp/quiz/pkg/database/query"
-
 	"github.com/kieranajp/quiz/pkg/database/eventstore"
 	"github.com/kieranajp/quiz/pkg/event"
 
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 )
 
 type GameServiceInterface interface {
@@ -18,18 +14,18 @@ type GameServiceInterface interface {
 }
 
 type GameService struct {
-	db *sqlx.DB
+	es *eventstore.EventStore
 }
 
-func NewGameService(db *sqlx.DB) *GameService {
-	return &GameService{db: db}
+func NewGameService(es *eventstore.EventStore) *GameService {
+	return &GameService{es: es}
 }
 
 func (s *GameService) CreateGame() (uuid.UUID, error) {
 	gameID := uuid.New()
 	initialPlayerID := uuid.New()
 
-	err := eventstore.CreateGame(s.db, gameID)
+	err := s.es.CreateGame(s.db, gameID)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -94,30 +90,4 @@ func (s *GameService) StartGame(gameID uuid.UUID) error {
 	}
 
 	return nil
-}
-
-func (s *GameService) NextQuestion(gameID uuid.UUID) (entity.Question, error) {
-	var question entity.Question
-
-	// Load the current game aggregate
-	game, err := eventstore.LoadGameAggregate(s.db, gameID)
-	if err != nil {
-		return question, err
-	}
-
-	if !game.HasStarted {
-		return question, fmt.Errorf("game %s has not yet started", gameID)
-	}
-
-	question, err = query.GetQuestion(s.db, game.CurrentRoundType)
-	if err != nil {
-		return question, err
-	}
-
-	err = eventstore.RecordThat(s.db, event.QuestionWasAsked(gameID, game.CurrentRound, question.QuestionID))
-	if err != nil {
-		return question, err
-	}
-
-	return question, nil
 }

@@ -1,14 +1,19 @@
 package aggregate
 
 import (
-	"github.com/google/uuid"
+	"github.com/kieranajp/quiz/pkg/database/eventstore"
 	"github.com/kieranajp/quiz/pkg/event"
+
+	"github.com/google/uuid"
 )
 
+// GameAggregate represents the state of a game and implements the Aggregate interface.
 type GameAggregate struct {
-	GameID           uuid.UUID
+	eventstore.BaseAggregate
+	ID               uuid.UUID
+	RoundNumber      int
+	Players          []uuid.UUID
 	HasStarted       bool
-	Players          int
 	Settings         GameSettings
 	CurrentRound     int
 	CurrentRoundType string
@@ -22,9 +27,9 @@ type GameSettings struct {
 
 func NewGameAggregate(gameID uuid.UUID) GameAggregate {
 	return GameAggregate{
-		GameID:     gameID,
+		ID:         gameID,
 		HasStarted: false,
-		Players:    0,
+		Players:    []uuid.UUID{},
 		Settings: GameSettings{
 			NumberOfRounds:    3,
 			MaxPlayers:        4,
@@ -33,15 +38,23 @@ func NewGameAggregate(gameID uuid.UUID) GameAggregate {
 	}
 }
 
-func (g *GameAggregate) ApplyGameCreated() {
+func (g *GameAggregate) AggregateID() uuid.UUID {
+	return g.ID
+}
+
+func (g *GameAggregate) ApplyEvent(e event.Event) error {
+	return g.BaseAggregate.ApplyEvent(g, e)
+}
+
+func (g *GameAggregate) ApplyGameCreated(e event.GameCreated) {
 	// No specific logic needed for creation
 }
 
-func (g *GameAggregate) ApplyPlayerJoined() {
-	g.Players++
+func (g *GameAggregate) ApplyPlayerJoined(e event.PlayerJoined) {
+	g.Players = append(g.Players, e.PlayerID)
 }
 
-func (g *GameAggregate) ApplyGameStarted() {
+func (g *GameAggregate) ApplyGameStarted(e event.GameStarted) {
 	g.HasStarted = true
 }
 
@@ -51,5 +64,5 @@ func (g *GameAggregate) ApplyRoundStarted(e event.RoundStarted) {
 }
 
 func (g *GameAggregate) IsFull() bool {
-	return g.Players == g.Settings.MaxPlayers
+	return len(g.Players) == g.Settings.MaxPlayers
 }

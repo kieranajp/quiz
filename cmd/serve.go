@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/kieranajp/quiz/pkg/database/eventstore"
 	"github.com/kieranajp/quiz/pkg/service"
 	"net/http"
 
@@ -24,7 +25,9 @@ func Serve(c *cli.Context) error {
 	}
 	defer db.Close()
 
-	gs := service.NewGameService(db)
+	es := eventstore.NewEventStore(db)
+
+	gs := service.NewGameService(es)
 	gh := handler.NewGameHandler(gs)
 
 	r.Get("/", handler.WelcomeHandler)

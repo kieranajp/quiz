@@ -1,61 +1,63 @@
 package query
 
 import (
+	"github.com/google/uuid"
 	"github.com/kieranajp/quiz/pkg/database/entity"
 
-	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
-const questionQuery = `
- 	SELECT
-		q.question_id,
-		q.question_text,
-		t.topic_name,
-		a.answer_id,
-		a.answer_text
-  	FROM public.questions q
-  	INNER JOIN public.answers a
-		ON q.question_id = a.question_id
-	INNER JOIN public.question_types qt
-		ON q.question_type_id = qt.question_type_id
-  	INNER JOIN public.question_topics t
-		ON q.topic_id = t.topic_id
-	WHERE qt.type_name = $1
-`
+// GetQuestions preselects questions for a given round
+func GetQuestions(db *sqlx.DB, roundType string, numQuestions int) ([]entity.Question, error) {
+	var questions []entity.Question
 
-func GetQuestion(db *sqlx.DB, roundType string) (entity.Question, error) {
-	var question entity.Question
-	answerMap := make(map[uuid.UUID][]entity.Answer)
+	const preselectQuery = `
+		SELECT DISTINCT ON (q.question_id)
+			q.question_id,
+			q.question_text,
+			t.topic_name
+		FROM public.questions q
+		INNER JOIN public.question_types qt
+			ON q.question_type_id = qt.question_type_id
+		INNER JOIN public.question_topics t
+			ON q.topic_id = t.topic_id
+		WHERE qt.type_name = $1
+		ORDER BY RANDOM()
+		LIMIT $2
+	`
 
-	type row struct {
-		QuestionID   uuid.UUID `db:"question_id"`
-		QuestionText string    `db:"question_text"`
-		TopicName    string    `db:"topic_name"`
-		AnswerID     uuid.UUID `db:"answer_id"`
-		AnswerText   string    `db:"answer_text"`
-	}
-
-	var rowsData []row
-	err := db.Select(&rowsData, questionQuery, roundType)
+	err := db.Select(&questions, preselectQuery, roundType, numQuestions)
 	if err != nil {
-		return entity.Question{}, err
+		return nil, err
 	}
 
-	for _, row := range rowsData {
-		if question.QuestionID == uuid.Nil {
-			question = entity.Question{
-				QuestionID: row.QuestionID,
-				Text:       row.QuestionText,
-				Topic:      row.TopicName,
-				Answers:    []entity.Answer{},
-			}
+	// Fetch answers for each question
+	for i, question := range questions {
+		answers, err := getAnswersForQuestion(db, question.QuestionID)
+		if err != nil {
+			return nil, err
 		}
-
-		answerMap[row.QuestionID] = append(answerMap[row.QuestionID], entity.Answer{AnswerID: row.AnswerID, Text: row.AnswerText})
+		questions[i].Answers = answers
 	}
 
-	question.Answers = answerMap[question.QuestionID]
+	return questions, nil
+}
 
-	return question, nil
+// getAnswersForQuestion retrieves answers for a given question ID
+func getAnswersForQuestion(db *sqlx.DB, questionID uuid.UUID) ([]entity.Answer, error) {
+	const answerQuery = `
+		SELECT
+			a.answer_id,
+			a.answer_text
+		FROM public.answers a
+		WHERE a.question_id = $1
+	`
+
+	var answers []entity.Answer
+	err := db.Select(&answers, answerQuery, questionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return answers, nil
 }
