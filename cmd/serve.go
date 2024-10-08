@@ -28,11 +28,12 @@ func Serve(c *cli.Context) error {
 	}
 	defer db.Close()
 
-	// Create an event registry and register events
 	eventRegistry := eventstore.NewEventRegistry()
-	eventRegistry.RegisterEvent("game_created", &event.GameCreated{})
-	eventRegistry.RegisterEvent("player_joined", &event.PlayerJoined{})
-	// Register other events as needed
+	eventRegistry.RegisterEvent(&event.GameCreated{})
+	eventRegistry.RegisterEvent(&event.GameStarted{})
+	eventRegistry.RegisterEvent(&event.PlayerJoined{})
+	eventRegistry.RegisterEvent(&event.RoundStarted{})
+	eventRegistry.RegisterEvent(&event.QuestionAsked{})
 
 	es := eventstore.NewEventStore(db, eventRegistry)
 	es.SetEventStreamNamingStrategy(func(aggregateID uuid.UUID) string {

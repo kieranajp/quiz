@@ -20,7 +20,8 @@ func NewEventRegistry() *EventRegistry {
 }
 
 // RegisterEvent registers an event type with its corresponding struct type.
-func (er *EventRegistry) RegisterEvent(eventType string, eventStruct interface{}) {
+func (er *EventRegistry) RegisterEvent(eventStruct interface{}) {
+	eventType := reflect.TypeOf(eventStruct).Elem().Name()
 	er.eventTypes[eventType] = reflect.TypeOf(eventStruct).Elem()
 }
 

@@ -79,6 +79,10 @@ func (es *EventStore) RecordThat(event event.Event) error {
 	return nil
 }
 
+func (es *EventStore) eventType(e event.Event) string {
+	return reflect.TypeOf(e).Elem().Name()
+}
+
 func (es *EventStore) persistEvent(e event.Event) error {
 	eventData, err := e.ToJSON()
 	if err != nil {
@@ -89,7 +93,7 @@ func (es *EventStore) persistEvent(e event.Event) error {
 		INSERT INTO %s (event_id, event_type, event_data, aggregate_id, created_at) VALUES ($1, $2, $3, $4, $5)
 	`, es.eventStreamNaming(e.AggregateID()))
 
-	_, err = es.db.Exec(saveEventQuery, e.EventID(), e.EventType(), eventData, e.AggregateID(), e.CreatedAt())
+	_, err = es.db.Exec(saveEventQuery, e.EventID(), es.eventType(e), eventData, e.AggregateID(), e.CreatedAt())
 	if err != nil {
 		return err
 	}
